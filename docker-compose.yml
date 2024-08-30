@@ -1,0 +1,184 @@
+version: '3'
+
+services:
+  # Zookeeper service for Kafka coordination and configuration management
+  zookeeper:
+      image: confluentinc/cp-zookeeper:7.4.0
+      hostname: zookeeper
+      container_name: zookeeper
+      ports:
+        - "2182:2182"  
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2182
+        ZOOKEEPER_TICK_TIME: 2000  
+      healthcheck:
+        test: ['CMD', 'bash', '-c', "echo 'ruok' | nc localhost 2182"]  
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      networks:
+        - confluent  # Part of the confluent network
+
+  # Kafka broker service for managing Kafka topics and message streams
+  broker:
+    image: confluentinc/cp-server:7.4.0
+    hostname: broker
+    container_name: broker
+    depends_on:
+      zookeeper:
+        condition: service_healthy  # Waits for Zookeeper to be healthy before starting
+    ports:
+      - "9092:9092"  # External port for client connections
+      - "9101:9101"  # JMX port for monitoring
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2182'  # Connection to Zookeeper
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # Replication factor for internal topics
+    networks:
+      - confluent
+    healthcheck:
+      test: [ "CMD", "bash", "-c", 'nc -z localhost 9092' ]  # Check if Kafka is accessible on port 9092
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Schema Registry service for managing schemas for Kafka data
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      broker:
+        condition: service_healthy  # Depends on Kafka broker
+    ports:
+      - "8081:8081"  # Schema Registry API port
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081  # Exposing Schema Registry on port 8081
+    networks:
+      - confluent
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/" ]  # Health check using a curl request
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Control Center for monitoring and managing the Kafka cluster
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.4.0
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      broker:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    ports:
+      - "9021:9021"  # Web UI port for the Control Center
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+    networks:
+      - confluent
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9021/health" ]  
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Airflow webserver for orchestrating data pipelines
+  webserver:
+    image: apache/airflow:2.6.0-python3.9
+    command: webserver
+    entrypoint: ['/opt/airflow/script/entrypoint.sh']
+    depends_on:
+      - postgres  # Depends on PostgreSQL database for metadata storage
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags  # Mounts local DAGs folder into the container
+      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh  # Custom entrypoint script
+      - ./requirements.txt:/opt/airflow/requirements.txt  # Python dependencies
+    ports:
+      - "8088:8080"  # Airflow webserver port
+    healthcheck:
+      test: ['CMD-SHELL', "[ -f /opt/airflow/airflow-webserver.pid ]"]  
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    networks:
+      - confluent
+
+  # PostgreSQL database service for Airflow
+  postgres:
+    image: postgres:14.0
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    networks:
+      - confluent
+
+  # Airflow scheduler for executing tasks according to DAG definitions
+  scheduler:
+    image: apache/airflow:2.6.0-python3.9
+    depends_on:
+      webserver:
+        condition: service_healthy
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
+      - ./requirements.txt:/opt/airflow/requirements.txt
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    command: bash -c "pip install -r ./requirements.txt && airflow db upgrade && airflow scheduler"  # Initializes DB and starts scheduler
+    networks:
+      - confluent
+
+  # Spark master node for distributed data processing
+  spark-master:
+    image: bitnami/spark:latest
+    command: bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "9090:8080"  # Web UI for the Spark master
+      - "7077:7077"  # Spark master port for worker connections
+    networks:
+      - confluent
+
+  # Spark worker node for distributed data processing
+  spark-worker:
+    image: bitnami/spark:latest
+    command: bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master  # Depends on Spark master being healthy
+    environment:
+      SPARK_MODE: worker
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 1g
+    networks:
+      - confluent
+
+  # Cassandra database for storing processed data
+  cassandra_db:
+    image: cassandra:latest
+    container_name: cassandra
+    hostname: cassandra
+    ports:
+      - "9042:9042"  
+    environment:
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=100M
+      - CASSANDRA_USERNAME=cassandra
+      - CASSANDRA_PASSWORD=cassandra
+    networks:
+      - confluent    
+
+networks:
+  confluent:
+
+
+
+  
+  
