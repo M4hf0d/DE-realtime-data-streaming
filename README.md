@@ -2,7 +2,8 @@
 
 ## Introduction
 End-to-end data pipeline from data ingestion to processing and storage, using Apache Airflow, Python, Apache Kafka, Zookeeper, Apache Spark, and Cassandra. The setup is containerized with Docker.
- This pipeline architecture is designed to handle real-time data processing, providing businesses with up-to-date insights and analytics. By leveraging scalable and distributed technologies, the solution supports large volumes of data, ensuring robust data flow, quick processing, and reliable storage, which are critical for data-driven decision-making.
+Automating data ingestion, processing, and storage, enhancing efficiency and scalability. It provides real-time insights with minimal manual intervention
+ 
 ## Components
 
 - **Data Source**: Fetches random user data from randomuser.me API.
