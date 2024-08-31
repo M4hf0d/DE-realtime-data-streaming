@@ -1,9 +1,11 @@
 # End-to-End Data Engineering Pipeline
 
-## Introduction
 End-to-end data pipeline from data ingestion to processing and storage, using Apache Airflow, Python, Apache Kafka, Zookeeper, Apache Spark, and Cassandra. The setup is containerized with Docker.
 Automating data ingestion, processing, and storage, enhancing efficiency and scalability. It provides real-time insights with minimal manual intervention
+
  
+![Pipeline Diagram](https://github.com/M4hf0d/DE-realtime-data-streaming/blob/master/diag.gif)
+
 ## Components
 
 - **Data Source**: Fetches random user data from randomuser.me API.
