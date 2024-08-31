@@ -13,11 +13,6 @@ Automating data ingestion, processing, and storage, enhancing efficiency and sca
 - **Apache Spark**: Processes the data using master and worker nodes.
 - **Cassandra**: Stores the processed data.
 
-## What I Learned
-- Pipeline orchestration and task scheduling.
-- Real-time data streaming with Kafka.
-- Distributed processing with Spark.
-- Containerization for consistent deployment.
 
 ## Technologies
 
