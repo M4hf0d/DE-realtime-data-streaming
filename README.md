@@ -3,7 +3,7 @@
 End-to-end data pipeline from data ingestion to processing and storage, using Apache Airflow, Python, Apache Kafka, Zookeeper, Apache Spark, and Cassandra. The setup is containerized with Docker.
 Automating data ingestion, processing, and storage, enhancing efficiency and scalability. It provides real-time insights with minimal manual intervention
 
-<img src="https://github.com/M4hf0d/DE-realtime-data-streaming/blob/master/diag.gif" alt="Pipeline Diagram" height="700" width="2000"/>
+<img src="https://github.com/M4hf0d/DE-realtime-data-streaming/blob/master/diag.gif" alt="Pipeline Diagram" width="2000"/>
 
 ## Components
 
